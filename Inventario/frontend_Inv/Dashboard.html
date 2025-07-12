@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard - Inventario</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="navbar">
+    Bienvenido <span id="userName"></span> |
+    <a href="index.html">Cerrar sesión</a>
+  </div>
+
+  <div class="container">
+    <h2>Inventario de Productos</h2>
+    <table id="inventoryTable">
+      <thead>
+        <tr>
+          <th>ID</th><th>Nombre</th><th>Categoría</th><th>Stock</th><th>Precio</th><th>Fecha ingreso</th><th>Tienda</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Datos se llenan dinámicamente -->
+      </tbody>
+    </table>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

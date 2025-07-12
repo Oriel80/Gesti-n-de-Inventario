@@ -1,0 +1,42 @@
+/* css/style.css */
+
+/* Estilos para el sidebar */
+.sidebar {
+    width: 0; /* Por defecto, oculto */
+    transition: 0.3s; /* Transición suave para abrir/cerrar */
+}
+
+.sidebar.open {
+    width: 250px; /* Ancho cuando está abierto */
+}
+
+/* En pantallas pequeñas, el sidebar puede ocupar más espacio */
+@media (max-width: 768px) {
+    .sidebar.open {
+        width: 70%; /* Ocupa el 70% del ancho de la pantalla */
+    }
+}
+
+/* Estilos para el overlay del sidebar */
+.sidebar-overlay {
+    transition: opacity 0.3s ease-in-out;
+}
+
+.sidebar-overlay.visible {
+    opacity: 0.5; /* Opacidad cuando está visible */
+    display: block; /* Asegura que se muestre */
+}
+
+/* Estilos para las pestañas de informes */
+.tab-content {
+    display: none; /* Oculta el contenido de las pestañas por defecto */
+}
+
+.tab-content.active {
+    display: block; /* Muestra el contenido de la pestaña activa */
+}
+
+.active-tab {
+    border-color: #4f46e5; /* Color de borde para la pestaña activa (indigo-600) */
+    color: #4f46e5; /* Color de texto para la pestaña activa */
+}

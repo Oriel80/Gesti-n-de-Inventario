@@ -1,0 +1,166 @@
+<!--<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Inventario y Ventas de Perfumería</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Estilos para el mensaje de confirmación */
+        .confirm-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .confirm-box {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-5xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">Gestión de Inventario y Ventas</h1>
+
+        <!-- Sección de Mensajes -->
+        <div id="message-box" class="hidden bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mb-6" role="alert">
+            <span class="block sm:inline" id="message-text"></span>
+            <span class="absolute top-0 bottom-0 right-0 px-4 py-3 cursor-pointer" onclick="document.getElementById('message-box').classList.add('hidden');">
+                <svg class="fill-current h-6 w-6 text-blue-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Close</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.15a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.03a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.15 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
+            </span>
+        </div>
+
+        <!-- Confirm Modal -->
+        <div id="confirm-modal" class="confirm-modal hidden">
+            <div class="confirm-box">
+                <p id="confirm-message" class="text-lg mb-4"></p>
+                <button id="confirm-yes" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mr-2">Sí</button>
+                <button id="confirm-no" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">No</button>
+            </div>
+        </div>
+
+        <!-- User Info (simulado para pruebas) -->
+        <div class="mb-6 p-4 bg-indigo-50 rounded-lg shadow-sm text-center">
+            <p class="text-lg font-medium text-indigo-800">
+                Usuario Actual: <span id="current-user-name" class="font-bold">Invitado</span> (ID: <span id="current-user-id" class="font-bold">1</span>, Rol: <span id="current-user-rol" class="font-bold">admin</span>, Tienda ID: <span id="current-user-tienda-id" class="font-bold">1</span>)
+            </p>
+            <p class="text-sm text-indigo-600 mt-2">
+                (En una aplicación real, estos datos vendrían de un login.)
+            </p>
+        </div>
+
+        <!-- Formulario de Producto (Crear/Actualizar) -->
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6 mt-10 text-center">Gestión de Productos</h2>
+        <form id="product-form" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 p-6 border border-gray-200 rounded-lg shadow-sm">
+            <input type="hidden" id="product-id">
+
+            <div>
+                <label for="nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Producto</label>
+                <input type="text" id="nombre" name="nombre" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="categoria" class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                <input type="text" id="categoria" name="categoria" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="stock" class="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+                <input type="number" id="stock" name="stock" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="precio" class="block text-sm font-medium text-gray-700 mb-1">Precio</label>
+                <input type="number" id="precio" name="precio" step="0.01" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="fecha_ingreso" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Ingreso</label>
+                <input type="date" id="fecha_ingreso" name="fecha_ingreso" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+            
+            <!-- Campo oculto para tienda_id, se llenará con el valor del usuario logeado -->
+            <input type="hidden" id="product-tienda-id" name="tienda_id">
+
+            <div class="md:col-span-2 flex justify-end space-x-4">
+                <button type="submit" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    Guardar Producto
+                </button>
+                <button type="button" id="cancel-edit-btn" class="hidden inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    Cancelar Edición
+                </button>
+            </div>
+        </form>
+
+        <!-- Formulario de Registro de Venta -->
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6 mt-10 text-center">Registrar Nueva Venta</h2>
+        <form id="sale-form" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 p-6 border border-gray-200 rounded-lg shadow-sm">
+            <!-- usuario_id se tomará del usuario logeado -->
+            <div>
+                <label for="sale-product-id" class="block text-sm font-medium text-gray-700 mb-1">ID del Producto</label>
+                <input type="number" id="sale-product-id" name="producto_id" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="sale-quantity" class="block text-sm font-medium text-gray-700 mb-1">Cantidad</label>
+                <input type="number" id="sale-quantity" name="cantidad" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div class="md:col-span-2 flex justify-end">
+                <button type="submit" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out">
+                    Registrar Venta
+                </button>
+            </div>
+        </form>
+
+        <!-- Tabla de Inventario / Productos -->
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6 mt-10 text-center">Inventario de Productos</h2>
+        <div class="mb-4 text-center">
+            <button id="refresh-inventory-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                Actualizar Inventario
+            </button>
+        </div>
+        <div class="overflow-x-auto shadow-md rounded-lg">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Ingreso</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tienda</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="inventory-table-body" class="bg-white divide-y divide-gray-200">
+                    <!-- Los productos del inventario se cargarán aquí -->
+                    <tr>
+                        <td colspan="8" class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">Cargando inventario...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

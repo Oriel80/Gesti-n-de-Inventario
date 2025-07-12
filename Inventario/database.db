@@ -1,0 +1,161 @@
+CREATE DATABASE IF NOT EXISTS inventario_perfumeria;
+USE inventario_perfumeria;
+
+-- Tabla Tiendas
+CREATE TABLE IF NOT EXISTS tiendas (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL,
+  ubicacion VARCHAR(100) NOT NULL
+);
+
+-- Tabla Usuarios con rol admin añadido
+CREATE TABLE IF NOT EXISTS usuarios (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL,
+  correo VARCHAR(100) UNIQUE NOT NULL,
+  contrasena VARCHAR(255) NOT NULL,
+  rol ENUM('admin','jefe', 'gerente', 'vendedor') NOT NULL DEFAULT 'vendedor',
+  tienda_id INT,
+  FOREIGN KEY (tienda_id) REFERENCES tiendas(id)
+);
+
+-- Tabla Productos
+CREATE TABLE IF NOT EXISTS productos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL,
+  categoria VARCHAR(50) NOT NULL,
+  stock INT NOT NULL CHECK (stock >= 0),
+  precio DECIMAL(10,2) NOT NULL CHECK (precio >= 0),
+  fecha_ingreso DATE NOT NULL,
+  tienda_id INT NOT NULL,
+  FOREIGN KEY (tienda_id) REFERENCES tiendas(id)
+);
+
+-- Tabla Ventas
+CREATE TABLE IF NOT EXISTS ventas (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  usuario_id INT NOT NULL,
+  tienda_id INT NOT NULL,
+  fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  FOREIGN KEY (tienda_id) REFERENCES tiendas(id)
+);
+
+-- Tabla Detalles de Venta
+CREATE TABLE IF NOT EXISTS detalles_venta (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  venta_id INT NOT NULL,
+  producto_id INT NOT NULL,
+  cantidad INT NOT NULL CHECK (cantidad > 0),
+  precio_unitimal DECIMAL(10,2) NOT NULL,
+  FOREIGN KEY (venta_id) REFERENCES ventas(id),
+  FOREIGN KEY (producto_id) REFERENCES productos(id)
+);
+
+-- NUEVA TABLA: Perdidas
+CREATE TABLE IF NOT EXISTS perdidas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    producto_id INT NOT NULL,
+    cantidad INT NOT NULL CHECK (cantidad > 0),
+    usuario_id INT NOT NULL,
+    tienda_id INT NOT NULL,
+    motivo TEXT NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (producto_id) REFERENCES productos(id),
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+    FOREIGN KEY (tienda_id) REFERENCES tiendas(id)
+);
+
+-- Bitácora de acciones
+CREATE TABLE IF NOT EXISTS bitacora_acciones (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  usuario_id INT NOT NULL,
+  accion TEXT NOT NULL,
+  fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+);
+
+-- Trigger para disminuir stock automáticamente al insertar detalles_venta
+DELIMITER //
+CREATE TRIGGER tr_descuento_stock
+AFTER INSERT ON detalles_venta
+FOR EACH ROW
+BEGIN
+  UPDATE productos
+  SET stock = stock - NEW.cantidad
+  WHERE id = NEW.producto_id;
+END;
+//
+DELIMITER ;
+
+-- Trigger para evitar eliminar producto con ventas
+DELIMITER //
+CREATE TRIGGER tr_bloquear_eliminacion_producto
+BEFORE DELETE ON productos
+FOR EACH ROW
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM detalles_venta WHERE producto_id = OLD.id
+  ) THEN
+    SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'No se puede eliminar el producto: ya tiene ventas registradas.';
+  END IF;
+END;
+//
+DELIMITER ;
+
+-- Procedimiento almacenado para agregar productos con control de rol
+DELIMITER //
+CREATE PROCEDURE agregar_producto_seguro(
+  IN p_usuario_id INT,
+  IN p_nombre VARCHAR(100),
+  IN p_categoria VARCHAR(50),
+  IN p_stock INT,
+  IN p_precio DECIMAL(10,2),
+  IN p_fecha DATE
+)
+BEGIN
+  DECLARE v_rol ENUM('admin','jefe','gerente','vendedor');
+  DECLARE v_tienda_id INT;
+
+  SELECT rol, tienda_id INTO v_rol, v_tienda_id
+  FROM usuarios WHERE id = p_usuario_id;
+
+  IF v_rol IN ('admin','gerente', 'jefe') THEN
+    INSERT INTO productos (nombre, categoria, stock, precio, fecha_ingreso, tienda_id)
+    VALUES (p_nombre, p_categoria, p_stock, p_precio, p_fecha, v_tienda_id);
+
+    INSERT INTO bitacora_acciones (usuario_id, accion)
+    VALUES (p_usuario_id, CONCAT('Agregó producto: ', p_nombre));
+  ELSE
+    SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Permiso denegado: solo admin, gerente o jefe puede agregar productos.';
+  END IF;
+END;
+//
+DELIMITER ;
+
+-- Procedimiento para registrar venta y disminuir stock automáticamente
+DELIMITER //
+CREATE PROCEDURE registrar_venta(
+  IN p_usuario_id INT,
+  IN p_producto_id INT,
+  IN p_cantidad INT
+)
+BEGIN
+  DECLARE v_precio DECIMAL(10,2);
+  DECLARE v_tienda_id INT;
+
+  SELECT precio, tienda_id INTO v_precio, v_tienda_id FROM productos WHERE id = p_producto_id;
+
+  INSERT INTO ventas (usuario_id, tienda_id) VALUES (p_usuario_id, v_tienda_id);
+  SET @venta_id = LAST_INSERT_ID();
+
+  INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario)
+  VALUES (@venta_id, p_producto_id, p_cantidad, v_precio);
+
+  INSERT INTO bitacora_acciones (usuario_id, accion)
+  VALUES (p_usuario_id, CONCAT('Registró venta de ', p_cantidad, ' unidades del producto ID ', p_producto_id));
+END;
+//
+DELIMITER ;

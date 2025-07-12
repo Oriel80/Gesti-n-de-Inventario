@@ -1,0 +1,368 @@
+// js/app.js
+
+// URL base de tu API PHP
+// ASEGÚRATE DE CAMBIAR 'tu_proyecto' por el nombre real de tu carpeta raíz del proyecto PHP
+const API_BASE_URL = 'http://localhost/Inventario/Backend_inv/api'; // CAMBIO REALIZADO AQUÍ
+
+// --- Simulación de Usuario Logeado (Para pruebas, en una app real vendría de un login) ---
+const currentUser = {
+    id: 1,      // ID del usuario logeado
+    name: "Admin User", // Nombre del usuario
+    rol: "admin", // Rol del usuario ('admin', 'jefe', 'gerente', 'vendedor')
+    tienda_id: 1 // ID de la tienda a la que pertenece el usuario
+};
+
+// Actualizar la información del usuario en la interfaz
+document.getElementById('current-user-name').textContent = currentUser.name;
+document.getElementById('current-user-id').textContent = currentUser.id;
+document.getElementById('current-user-rol').textContent = currentUser.rol;
+document.getElementById('current-user-tienda-id').textContent = currentUser.tienda_id;
+// --- Fin Simulación ---
+
+
+// --- Referencias a elementos del DOM ---
+const productForm = document.getElementById('product-form');
+const productIdInput = document.getElementById('product-id');
+const nombreInput = document.getElementById('nombre');
+const categoriaInput = document.getElementById('categoria');
+const stockInput = document.getElementById('stock');
+const precioInput = document.getElementById('precio');
+const fechaIngresoInput = document.getElementById('fecha_ingreso'); // Nuevo campo de fecha
+const productTiendaIdInput = document.getElementById('product-tienda-id'); // Campo oculto para tienda_id en productos
+const cancelEditBtn = document.getElementById('cancel-edit-btn');
+
+const saleForm = document.getElementById('sale-form');
+const saleProductIdInput = document.getElementById('sale-product-id');
+const saleQuantityInput = document = document.getElementById('sale-quantity');
+
+const inventoryTableBody = document.getElementById('inventory-table-body');
+const refreshInventoryBtn = document.getElementById('refresh-inventory-btn');
+
+const messageBox = document.getElementById('message-box');
+const messageText = document.getElementById('message-text');
+
+const confirmModal = document.getElementById('confirm-modal');
+const confirmMessage = document.getElementById('confirm-message');
+const confirmYesBtn = document.getElementById('confirm-yes');
+const confirmNoBtn = document.getElementById('confirm-no');
+
+let confirmCallback = null; // Para almacenar la función a ejecutar si se confirma
+
+// --- Funciones de Utilidad ---
+
+/**
+ * Muestra un mensaje en la interfaz de usuario.
+ * @param {string} message El mensaje a mostrar.
+ * @param {string} type El tipo de mensaje (e.g., 'success', 'error', 'info').
+ */
+function showMessage(message, type = 'info') {
+    messageText.textContent = message;
+    messageBox.classList.remove('hidden');
+
+    // Limpia clases de tipo anteriores
+    messageBox.classList.remove('bg-green-100', 'border-green-400', 'text-green-700',
+                               'bg-red-100', 'border-red-400', 'text-red-700',
+                               'bg-blue-100', 'border-blue-400', 'text-blue-700');
+
+    // Agrega clases según el tipo de mensaje
+    switch (type) {
+        case 'success':
+            messageBox.classList.add('bg-green-100', 'border-green-400', 'text-green-700');
+            break;
+        case 'error':
+            messageBox.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+            break;
+        case 'info':
+        default:
+            messageBox.classList.add('bg-blue-100', 'border-blue-400', 'text-blue-700');
+            break;
+    }
+
+    // Oculta el mensaje después de 5 segundos
+    setTimeout(() => {
+        messageBox.classList.add('hidden');
+    }, 5000);
+}
+
+/**
+ * Muestra un modal de confirmación personalizado.
+ * @param {string} message El mensaje de confirmación.
+ * @returns {Promise<boolean>} Una promesa que se resuelve a true si se confirma, false si se cancela.
+ */
+function showConfirm(message) {
+    return new Promise((resolve) => {
+        confirmMessage.textContent = message;
+        confirmModal.classList.remove('hidden');
+
+        confirmCallback = (result) => {
+            confirmModal.classList.add('hidden');
+            resolve(result);
+            confirmCallback = null; // Limpiar el callback
+        };
+    });
+}
+
+// Event listeners para el modal de confirmación
+confirmYesBtn.addEventListener('click', () => {
+    if (confirmCallback) {
+        confirmCallback(true);
+    }
+});
+
+confirmNoBtn.addEventListener('click', () => {
+    if (confirmCallback) {
+        confirmCallback(false);
+    }
+});
+
+
+/**
+ * Limpia el formulario de productos y oculta el botón de cancelar edición.
+ */
+function clearProductForm() {
+    productIdInput.value = '';
+    nombreInput.value = '';
+    categoriaInput.value = '';
+    stockInput.value = '';
+    precioInput.value = '';
+    fechaIngresoInput.value = ''; // Limpiar campo de fecha
+    cancelEditBtn.classList.add('hidden');
+}
+
+/**
+ * Limpia el formulario de ventas.
+ */
+function clearSaleForm() {
+    saleProductIdInput.value = '';
+    saleQuantityInput.value = '';
+}
+
+// --- Lógica de Productos (CRUD) ---
+
+/**
+ * Carga los productos en la tabla de inventario.
+ */
+async function loadInventory() {
+    inventoryTableBody.innerHTML = `<tr><td colspan="8" class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">Cargando inventario...</td></tr>`;
+    try {
+        // Asegúrate de pasar el rol y tienda_id del usuario logeado
+        const response = await fetch(`${API_BASE_URL}/inventory/consult.php?rol=${currentUser.rol}&tienda_id=${currentUser.tienda_id}`);
+        const data = await response.json();
+
+        inventoryTableBody.innerHTML = ''; // Limpia la tabla antes de añadir nuevos datos
+
+        if (response.ok && data.status === 'success' && data.data && data.data.length > 0) {
+            data.data.forEach(product => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${product.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.nombre}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.categoria}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.stock}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${parseFloat(product.precio).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.fecha_ingreso}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${product.tienda_nombre || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onclick="editProduct(${product.id})" class="text-indigo-600 hover:text-indigo-900 mr-4">Editar</button>
+                        <button onclick="deleteProduct(${product.id})" class="text-red-600 hover:text-red-900">Eliminar</button>
+                    </td>
+                `;
+                inventoryTableBody.appendChild(row);
+            });
+        } else {
+            inventoryTableBody.innerHTML = `<tr><td colspan="8" class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">${data.message || 'No se encontraron productos en el inventario.'}</td></tr>`;
+        }
+    } catch (error) {
+        console.error('Error al cargar inventario:', error);
+        inventoryTableBody.innerHTML = `<tr><td colspan="8" class="px-6 py-4 whitespace-nowrap text-center text-sm text-red-500">Error al cargar inventario. Por favor, verifica la conexión con el backend.</td></tr>`;
+        showMessage('Error al cargar inventario. Por favor, verifica la conexión con el backend.', 'error');
+    }
+}
+
+/**
+ * Maneja el envío del formulario de productos para crear o actualizar.
+ * @param {Event} event El evento de envío del formulario.
+ */
+productForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const id = productIdInput.value;
+    const productData = {
+        usuario_id: currentUser.id, // Se envía el ID del usuario logeado
+        nombre: nombreInput.value,
+        categoria: categoriaInput.value,
+        stock: parseInt(stockInput.value, 10),
+        precio: parseFloat(precioInput.value),
+        fecha_ingreso: fechaIngresoInput.value,
+        tienda_id: currentUser.tienda_id // Se envía el ID de la tienda del usuario logeado
+    };
+
+    let url = '';
+    let method = '';
+
+    if (id) {
+        // Actualizar producto existente
+        url = `${API_BASE_URL}/products/update.php`;
+        method = 'PUT';
+        productData.id = parseInt(id, 10); // Asegura que el ID sea un entero
+    } else {
+        // Crear nuevo producto
+        url = `${API_BASE_URL}/products/create.php`;
+        method = 'POST';
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(productData)
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.status === 'success') {
+            showMessage(result.message, 'success');
+            clearProductForm(); // Limpia el formulario después de guardar
+            loadInventory(); // Recarga la tabla de inventario
+        } else {
+            showMessage(result.message || 'Ocurrió un error al guardar el producto.', 'error');
+        }
+    } catch (error) {
+        console.error('Error al guardar el producto:', error);
+        showMessage('Error de conexión al intentar guardar el producto.', 'error');
+    }
+});
+
+/**
+ * Carga los datos de un producto en el formulario para edición.
+ * @param {number} id El ID del producto a editar.
+ */
+async function editProduct(id) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/products/read.php?id=${id}`);
+        const result = await response.json();
+
+        if (response.ok && result.status === 'success' && result.data) {
+            const product = result.data;
+            productIdInput.value = product.id;
+            nombreInput.value = product.nombre;
+            categoriaInput.value = product.categoria;
+            stockInput.value = product.stock;
+            precioInput.value = product.precio;
+            fechaIngresoInput.value = product.fecha_ingreso;
+            productTiendaIdInput.value = product.tienda_id; // Asegurarse de que este campo oculto se llene
+            cancelEditBtn.classList.remove('hidden'); // Muestra el botón de cancelar
+            window.scrollTo({ top: 0, behavior: 'smooth' }); // Desplaza al inicio de la página
+        } else {
+            showMessage(result.message || 'Producto no encontrado para edición.', 'error');
+        }
+    } catch (error) {
+        console.error('Error al obtener producto para edición:', error);
+        showMessage('Error de conexión al obtener el producto para edición.', 'error');
+    }
+}
+
+/**
+ * Elimina un producto.
+ * @param {number} id El ID del producto a eliminar.
+ */
+async function deleteProduct(id) {
+    const confirmed = await showConfirm('¿Estás seguro de que quieres eliminar este producto?');
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/products/delete.php`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id: id })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.status === 'success') {
+            showMessage(result.message, 'success');
+            loadInventory(); // Recarga la tabla de inventario
+        } else {
+            showMessage(result.message || 'Ocurrió un error al eliminar el producto.', 'error');
+        }
+    } catch (error) {
+        console.error('Error al eliminar el producto:', error);
+        showMessage('Error de conexión al intentar eliminar el producto.', 'error');
+    }
+}
+
+// --- Lógica de Ventas ---
+
+/**
+ * Maneja el envío del formulario de ventas para registrar una venta.
+ * @param {Event} event El evento de envío del formulario.
+ */
+saleForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const userId = currentUser.id; // Obtener el ID del usuario logeado
+    const productId = parseInt(saleProductIdInput.value, 10);
+    const quantity = parseInt(saleQuantityInput.value, 10);
+
+    // Validaciones básicas en el frontend
+    if (isNaN(productId) || productId <= 0 || isNaN(quantity) || quantity <= 0) {
+        showMessage('Por favor, ingresa un ID de producto y una cantidad válidos.', 'error');
+        return;
+    }
+
+    const saleData = {
+        usuario_id: userId,
+        producto_id: productId,
+        cantidad: quantity
+    };
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/sales/register.php`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(saleData)
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.status === 'success') {
+            showMessage(result.message, 'success');
+            clearSaleForm(); // Limpiar el formulario de venta
+            loadInventory(); // Recargar el inventario para reflejar el cambio de stock
+        } else {
+            showMessage(result.message || 'Ocurrió un error al registrar la venta.', 'error');
+        }
+    } catch (error) {
+        console.error('Error al registrar la venta:', error);
+        showMessage('Error de conexión al intentar registrar la venta.', 'error');
+    }
+});
+
+
+// --- Event Listeners Iniciales ---
+cancelEditBtn.addEventListener('click', clearProductForm);
+refreshInventoryBtn.addEventListener('click', loadInventory);
+
+// Carga el inventario al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
+    // Establecer la fecha actual en el campo de fecha de ingreso por defecto
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months start at 0!
+    const dd = String(today.getDate()).padStart(2, '0');
+    fechaIngresoInput.value = `${yyyy}-${mm}-${dd}`;
+
+    // Llenar el campo oculto de tienda_id para el formulario de productos
+    productTiendaIdInput.value = currentUser.tienda_id;
+
+    loadInventory();
+});

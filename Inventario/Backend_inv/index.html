@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Inventario y Ventas de Perfumería</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome para iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            min-height: 100vh;
+            overflow-y: auto; 
+            overflow-x: hidden; /* Importante para evitar scroll horizontal al abrir sidebar */
+            padding-top: 64px; /* Espacio ajustado para la nueva franja superior blanca + la franja azul */
+        }
+        /* Estilos base para modales */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-box {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+        @media (min-width: 768px) {
+            .modal-box {
+                max-width: 800px;
+            }
+        }
+
+        /* Estilos para el Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 0; /* Por defecto oculto */
+            max-width: 300px; /* Ancho máximo para el sidebar */
+            height: 100%;
+            background-color: white;
+            overflow-x: hidden;
+            transition: 0.5s; /* Transición suave para abrir/cerrar */
+            padding-top: 60px;
+            z-index: 1050; /* Mayor que los modales para que esté por encima */
+            box-shadow: -4px 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .sidebar.open {
+            width: 250px; /* Ancho cuando está abierto */
+        }
+        @media (max-width: 767px) { /* Ajuste para móviles */
+            .sidebar.open {
+                width: 70%; /* Más ancho en móviles */
+            }
+        }
+
+        .sidebar a {
+            padding: 15px 25px;
+            text-decoration: none;
+            font-size: 1.25rem; /* text-xl */
+            color: black;
+            display: block;
+            transition: 0.3s;
+        }
+
+        .sidebar a:hover {
+            background-color: #f0f0f0;
+            color: #4f46e5; /* indigo-600 */
+        }
+
+        .sidebar .closebtn {
+            position: absolute;
+            top: 0;
+            right: 25px;
+            font-size: 36px;
+            margin-left: 50px;
+            color: #6b7280; /* gray-500 */
+        }
+        .sidebar .closebtn:hover {
+            color: #ef4444; /* red-500 */
+        }
+
+        /* Nuevo: Estilos para el overlay del sidebar */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4); /* Fondo semitransparente oscuro */
+            z-index: 1040; /* Menor que el sidebar, mayor que el contenido */
+            display: none; /* Oculto por defecto */
+        }
+        .sidebar-overlay.visible {
+            display: block; /* Visible cuando se activa */
+        }
+        /* Estilos para las pestañas de informes */
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .active-tab {
+            border-color: #4f46e5; /* indigo-600 */
+            color: #4f46e5;
+        }
+    </style>
+</head>
+<!-- El body usa grid para el layout principal: logo fijo, imágenes laterales y contenido centrado -->
+<body class="bg-gray-100 grid grid-cols-1 md:grid-cols-[1fr_minmax(auto,theme(maxWidth.5xl))_1fr] min-h-screen relative">
+    <!-- Hidden element to check HTML version in JS -->
+    <meta id="html-version" data-version="2.1.0"> <!-- Versión actualizada para indicar cambios -->
+
+    <!-- Nuevo: Overlay del sidebar -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- Nueva Franja Blanca Superior Fija (la más alta) -->
+    <div class="fixed top-0 left-0 w-full h-4 bg-white z-[1000] shadow-sm"></div>
+
+    <!-- Nueva Franja Azul Superior Fija -->
+    <div id="main-header-strip" class="fixed top-[16px] left-0 w-full bg-indigo-800 text-white py-1.5 px-4 flex items-center justify-between z-[1000] shadow-lg rounded-b-lg">
+        <!-- Left side: Logo + User Info + View Stores Inventory Button -->
+        <div class="flex items-center flex-shrink-0">
+            <img src="img/ibw.png" alt="Logo de la Empresa" id="logo-home-btn" class="w-12 h-12 rounded-full shadow-md object-cover cursor-pointer mr-4 p-0.5 bg-white">
+            <div id="user-info-strip" class="hidden md:flex flex-col text-xs text-indigo-100 ml-4">
+                <p>Usuario: <span id="current-user-name" class="font-bold"></span></p>
+                <p>ID: <span id="current-user-id" class="font-bold"></span></p>
+                <p>Rol: <span id="current-user-rol" class="font-bold"></span></p>
+                <p>Tienda ID: <span id="current-user-tienda-id" class="font-bold"></span></p>
+            </div>
+            <!-- Nuevo botón para ver inventario de otras tiendas en el encabezado -->
+            <button id="view-other-stores-btn" class="inline-flex items-center px-3 py-1 border border-indigo-300 text-xs font-medium rounded-md shadow-sm text-indigo-800 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out ml-6">
+                Ver Inventario de Tiendas
+            </button>
+        </div>
+
+        <!-- Center: Title (absolute positioning for true centering) -->
+        <h1 class="text-lg md:text-xl font-bold text-white tracking-wide absolute left-1/2 -translate-x-1/2">Gestión de Inventario y Ventas</h1>
+
+        <!-- Right side: Search Bar + Buttons -->
+        <div class="flex items-center space-x-4 ml-auto flex-shrink-0">
+            <div class="flex items-center"> <!-- Search input and button group -->
+                <input type="text" id="search-input-header" placeholder="Buscar producto..." class="px-2 py-0.5 rounded-l-md text-gray-800 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs w-24 md:w-32">
+                <button id="search-btn-header" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-0.5 rounded-r-md transition duration-150 ease-in-out text-xs">Buscar</button>
+            </div>
+            <button id="logout-btn-header" class="inline-flex items-center px-2 py-0.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-150 ease-in-out">
+                Cerrar Sesión
+            </button>
+            <button id="options-btn" class="p-1 rounded-full bg-white shadow-md hover:bg-gray-100 transition duration-150 ease-in-out cursor-pointer">
+                <img src="img/rallitas.png" alt="Opciones" class="w-6 h-6">
+            </button>
+        </div>
+    </div>
+
+    <!-- Sidebar de Opciones -->
+    <div id="options-sidebar" class="sidebar">
+        <a href="javascript:void(0)" class="closebtn" id="close-sidebar-btn">&times;</a>
+        <h3 class="text-2xl font-bold text-center text-gray-800 mb-6 px-4">Opciones</h3>
+        <!-- Contenido del menú del sidebar -->
+        <div class="py-3 px-4 text-gray-800"> <!-- Añadido padding y color de texto aquí -->
+            <!-- Información del usuario en el sidebar móvil -->
+            <div class="mb-6">
+                <p class="text-sm">Usuario: <span id="current-user-name-mobile" class="font-semibold"></span></p>
+                <p class="text-sm">Rol: <span id="current-user-rol-mobile"></span></p>
+                <p class="text-sm">Tienda: <span id="current-user-tienda-id-mobile" class="font-semibold"></span></p>
+            </div>
+            <!-- Los enlaces del sidebar ahora tienen IDs para ser controlados por JS -->
+            <a href="#" id="sidebar-view-other-stores-btn" class="flex items-center py-2 px-3 text-lg hover:bg-gray-100 rounded-md"><i class="fas fa-store mr-3"></i> Ver Inventario de Tiendas</a>
+            <a href="#" id="stores-option-btn" class="flex items-center py-2 px-3 text-lg hover:bg-gray-100 rounded-md"><i class="fas fa-cogs mr-3"></i> Gestionar Mi Tienda</a>
+            <a href="#" id="reports-option-btn" class="flex items-center py-2 px-3 text-lg hover:bg-gray-100 rounded-md"><i class="fas fa-chart-line mr-3"></i> Informes</a>
+            <a href="#" id="sidebar-logout-btn" class="flex items-center py-2 px-3 text-lg hover:bg-gray-100 rounded-md"><i class="fas fa-sign-out-alt mr-3"></i> Cerrar Sesión</a>
+        </div>
+    </div>
+
+    <!-- Imagen Lateral Izquierda (visible solo en pantallas medianas y grandes) -->
+    <div class="hidden md:flex items-center justify-center md:col-start-1 md:col-end-2">
+        <img src="img/perf2.png" alt="Diseño Lateral Izquierdo" class="w-full h-full object-cover">
+    </div>
+
+    <!-- Contenedor Principal de la Aplicación (centrado en el grid) -->
+    <div id="app-content" class="bg-white p-8 rounded-lg shadow-xl w-full max-w-5xl z-10 md:col-start-2 md:col-end-3 hidden">
+        <!-- Sección de Mensajes -->
+        <div id="message-box" class="hidden bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mb-6" role="alert">
+            <span class="block sm:inline" id="message-text"></span>
+            <span class="absolute top-0 bottom-0 right-0 px-4 py-3 cursor-pointer" id="close-message-btn">
+                <svg class="fill-current h-6 w-6 text-blue-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Close</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.15a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.03a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.15 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
+            </span>
+        </div>
+
+        <!-- Confirm Modal -->
+        <div id="confirm-modal" class="modal hidden">
+            <div class="modal-box">
+                <p id="confirm-message" class="text-lg mb-4"></p>
+                <button id="confirm-yes" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded mr-2">Sí</button>
+                <button id="confirm-no" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">No</button>
+            </div>
+        </div>
+
+        <!-- Formulario de Producto (Crear/Actualizar) -->
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6 mt-10 text-center">Gestión de Productos</h2>
+        <form id="product-form" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 p-6 border border-gray-200 rounded-lg shadow-sm">
+            <input type="hidden" id="product-id">
+            <!-- Campo oculto para tienda_id, se llenará con el valor del usuario logeado -->
+            <input type="hidden" id="product-tienda-id" name="tienda_id">
+
+            <div>
+                <label for="nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Producto</label>
+                <input type="text" id="nombre" name="nombre" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="categoria" class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                <input type="text" id="categoria" name="categoria" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="stock" class="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+                <input type="number" id="stock" name="stock" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="precio" class="block text-sm font-medium text-gray-700 mb-1">Precio</label>
+                <input type="number" id="precio" name="precio" step="0.01" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="fecha_ingreso" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Ingreso</label>
+                <input type="date" id="fecha_ingreso" name="fecha_ingreso" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+            
+            <div>
+                <label for="product-image" class="block text-sm font-medium text-gray-700 mb-1">Imagen del Producto</label>
+                <input type="file" id="product-image" name="imagen" accept="image/*" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            </div>
+
+            <div class="md:col-span-2 flex justify-end space-x-4">
+                <button type="submit" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    Guardar Producto
+                </button>
+                <button type="button" id="cancel-edit-btn" class="hidden inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    Cancelar Edición
+                </button>
+            </div>
+        </form>
+
+        <!-- Formulario de Registro de Venta/Pérdida -->
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6 mt-10 text-center">Registrar Transacción de Inventario</h2>
+        <form id="sale-form" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 p-6 border border-gray-200 rounded-lg shadow-sm">
+            <!-- usuario_id se tomará del usuario logeado -->
+            <div>
+                <label for="sale-product-id" class="block text-sm font-medium text-gray-700 mb-1">ID del Producto</label>
+                <input type="number" id="sale-product-id" name="producto_id" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div>
+                <label for="sale-quantity" class="block text-sm font-medium text-gray-700 mb-1">Cantidad</label>
+                <input type="number" id="sale-quantity" name="cantidad" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <!-- Nuevo campo para Tipo de Transacción -->
+            <div>
+                <label for="transaction-type" class="block text-sm font-medium text-gray-700 mb-1">Tipo de Transacción</label>
+                <select id="transaction-type" name="tipo_transaccion" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <option value="sale">Venta</option>
+                    <option value="loss">Pérdida</option>
+                </select>
+            </div>
+
+            <!-- Campo para Motivo de Pérdida (visible solo si se selecciona "Pérdida") -->
+            <div id="loss-reason-field" class="hidden">
+                <label for="loss-reason" class="block text-sm font-medium text-gray-700 mb-1">Motivo de la Pérdida</label>
+                <input type="text" id="loss-reason" name="motivo_perdida" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+
+            <div class="md:col-span-2 flex justify-end">
+                <button type="submit" class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out">
+                    Registrar Transacción
+                </button>
+            </div>
+        </form>
+
+        <!-- Tabla de Inventario / Productos -->
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6 mt-10 text-center">Inventario de Productos</h2>
+        <div class="mb-4 text-center space-x-4">
+            <button id="refresh-inventory-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                Actualizar Inventario
+            </button>
+        </div>
+        <div class="overflow-x-auto shadow-md rounded-lg">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Ingreso</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tienda</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="inventory-table-body" class="bg-white divide-y divide-gray-200">
+                    <!-- Los productos del inventario se cargarán aquí -->
+                    <tr>
+                        <td colspan="8" class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">Cargando inventario...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal para ver inventario de otras tiendas (el original, ahora para "Ver Inventario de Otras Tiendas (Modal)") -->
+    <div id="view-other-stores-modal" class="modal hidden">
+        <div class="modal-box">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Inventario de Otras Tiendas</h2>
+            <div class="mb-4">
+                <label for="store-select" class="block text-sm font-medium text-gray-700 mb-1">Seleccionar Tienda:</label>
+                <select id="store-select" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <option value="">Cargando tiendas...</option>
+                </select>
+            </div>
+            <div class="overflow-x-auto shadow-md rounded-lg mt-6">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Ingreso</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tienda</th>
+                        </tr>
+                    </thead>
+                    <tbody id="other-stores-inventory-table-body" class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="7" class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">Selecciona una tienda para ver su inventario.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <button id="close-view-other-stores-modal-btn" class="mt-6 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Nuevo Modal para SELECCIONAR Tienda (para la opción "Tiendas" del sidebar) -->
+    <div id="select-store-modal" class="modal hidden">
+        <div class="modal-box">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Seleccionar Tienda Principal</h2>
+            <div class="mb-4">
+                <label for="select-store-dropdown" class="block text-sm font-medium text-gray-700 mb-1">Cambiar a Tienda:</label>
+                <select id="select-store-dropdown" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <option value="">Cargando tiendas...</option>
+                </select>
+            </div>
+            <div class="flex justify-center space-x-4 mt-6">
+                <button id="confirm-select-store-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">Confirmar</button>
+                <button id="close-select-store-modal-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nuevo Modal para Informes -->
+    <div id="reports-modal" class="modal hidden">
+        <div class="modal-box max-w-2xl">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Informes de Negocio</h2>
+            
+            <!-- Pestañas para Informe General y Ganancias/Pérdidas -->
+            <div class="flex justify-center mb-4 border-b border-gray-200">
+                <button id="general-report-tab" class="px-4 py-2 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:border-indigo-500 hover:text-indigo-600 focus:outline-none">
+                    Informe General
+                </button>
+                <button id="gains-losses-tab" class="ml-4 px-4 py-2 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:border-indigo-500 hover:text-indigo-600 focus:outline-none active-tab">
+                    Ganancias y Pérdidas
+                </button>
+            </div>
+
+            <!-- Contenido del Informe General -->
+            <div id="general-report-content" class="tab-content hidden">
+                <div class="mb-4">
+                    <label for="general-report-store-select" class="block text-sm font-medium text-gray-700 mb-1">Seleccionar Tienda:</label>
+                    <select id="general-report-store-select" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="0">Todas las tiendas</option>
+                        <!-- Las opciones de tiendas se cargarán aquí dinámicamente -->
+                    </select>
+                </div>
+                <div class="text-left space-y-4">
+                    <p class="text-lg text-gray-700">Total de Productos: <span id="total-products" class="font-semibold text-indigo-600">Cargando...</span></p>
+                    <p class="text-lg text-gray-700">Total de Ventas Registradas: <span id="total-sales-registered" class="font-semibold text-indigo-600">Cargando...</span></p>
+                    <p class="text-lg text-gray-700">Valor Total del Inventario: <span id="total-inventory-value" class="font-semibold text-indigo-600">Cargando...</span></p>
+                </div>
+            </div>
+
+            <!-- Contenido de Ganancias y Pérdidas -->
+            <div id="gains-losses-content" class="tab-content active">
+                <div class="overflow-x-auto shadow-md rounded-lg mt-4">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Venta</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Unitario</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Venta</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Venta</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gains-losses-table-body" class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="6" class="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">Cargando datos de ganancias y pérdidas...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-6 text-right text-lg font-bold text-gray-800">
+                    <p>Total Ganancias: <span id="total-gains" class="text-green-600">$0.00</span></p>
+                    <p>Total Pérdidas: <span id="total-losses" class="text-red-600">$0.00</span></p>
+                    <p>Balance Neto: <span id="net-balance" class="text-blue-600">$0.00</span></p>
+                </div>
+            </div>
+
+            <button id="close-reports-modal-btn" class="mt-6 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Imagen Lateral Derecha (visible solo en pantallas medianas y grandes) -->
+    <div class="hidden md:flex items-center justify-center md:col-start-3 md:col-end-4">
+        <img src="img/perf3.png" alt="Diseño Lateral Derecho" class="w-full h-full object-cover">
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
